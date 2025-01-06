@@ -8,6 +8,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "playright": "^0.0.22",
     "playwright": "^1.39.0"
   },
   "devDependencies": {
