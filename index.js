@@ -1,43 +1,95 @@
-// EDIT THIS FILE TO COMPLETE ASSIGNMENT QUESTION 1
 const { chromium } = require("playwright");
 
 async function sortHackerNewsArticles() {
-  // launch browser
-  const browser = await chromium.launch({ headless: true }); //headless mode is used for automation.
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  let browser = await chromium.launch({ headless: true, args: ['--disable-gpu', '--no-sandbox'] });
+  let context = await browser.newContext();
+  let page = await context.newPage();
+
+  async function restartBrowser() {
+    console.log("Restarting browser...");
+    if (browser && browser.isConnected()) await browser.close();
+    browser = await chromium.launch({ headless: true, args: ['--disable-gpu', '--no-sandbox'] });
+    context = await browser.newContext();
+    page = await context.newPage();
+    await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
+  }
 
   try {
- // go to Hacker News
- await page.goto("https://news.ycombinator.com/newest");
- 
- //Extracting articles
- const articles = await page.$$eval(".athing", (nodes) => {
-  return nodes.map((node) => ({
-    id: parseInt(node.getAttribute("id"), 10), //ids will be used to check sorting.
-  }))
- });
+    await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
 
- //Validation of number of articles.
- if(articles.length !== 100) {
-  throw new Error(`Expected 100 articles, but found ${articles.length}`);
- }
+    let articles = [];
+    let totalRetries = 3;
 
- console.log("100 articles were found");
+    while (articles.length < 100 && totalRetries > 0) {
+      try {
+        if (!page.isClosed()) {
+          console.log("Fetching articles...");
+          const newArticles = await page.$$eval(".athing", (nodes) =>
+            nodes.map((node) => ({
+              id: parseInt(node.getAttribute("id"), 10),
+            }))
+          );
+          console.log(`Fetched ${newArticles.length} articles from the current page.`);
+          articles = articles.concat(newArticles);
+    
+          if (articles.length < 100) {
+            const link = await page.$("a.morelink");
+            if (link) {
+              await link.scrollIntoViewIfNeeded(); // Ensure link is visible
+              await page.waitForSelector("a.morelink", { state: "visible" }); // Confirm visibility
+    
+              console.log("Found 'More' link. Clicking...");
+              const currentURL = page.url();
+              await link.click();
+    
+              await page.waitForLoadState("networkidle"); // Wait for network requests
+              const newURL = page.url();
+              console.log("URL after click:", newURL);
+    
+              if (currentURL === newURL) {
+                throw new Error("Pagination failed: URL did not change.");
+              }
+    
+              await page.waitForSelector(".athing", { timeout: 10000 }); // Wait for new articles
+              console.log("Navigation to next page successful.");
+            } else {
+              console.warn("No 'More' link found. Exiting pagination.");
+              break;
+            }
+          }
+        } else {
+          console.warn("Page is closed. Restarting...");
+          await restartBrowser();
+        }
+      } catch (err) {
+        totalRetries--;
+        console.warn("Retrying after failure, attempts left:", totalRetries);
+        if (totalRetries === 0) {
+          throw new Error("Max retries reached. Exiting.");
+        }
+        await restartBrowser();
+      }
+    }
 
- //Validation of sorting.
-const ids = articles.map((article) => article.id);
-const sortedIds = [...ids].sort((a, b) => a - b); //Sorting ids in descending order.
+    articles = articles.slice(0, 100);
 
-if(JSON.stringify(ids) !== JSON.stringify(sortedIds)) {
-  throw new Error("Articles are not sorted from newest to oldest");
-}
- console.log("Articles are sorted from newest to oldest");
-} catch (error) {
-    console.error("Validation error", error);
-} finally {
-    await browser.close();
-    return;
+    if (articles.length !== 100) {
+      throw new Error(`100 articles were not found. Found: ${articles.length}`);
+    }
+    console.log("100 articles found");
+
+    const ids = articles.map((article) => article.id);
+    const sortedIds = [...ids].sort((a, b) => b - a);
+
+    if (JSON.stringify(ids) !== JSON.stringify(sortedIds)) {
+      throw new Error("Articles are not sorted in the right order: From newest to oldest");
+    }
+
+    console.log("Articles are sorted correctly");
+  } catch (error) {
+    console.error("Validation error:", error.message);
+  } finally {
+    if (browser) await browser.close();
   }
 }
 
