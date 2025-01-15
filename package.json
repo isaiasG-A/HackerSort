@@ -8,6 +8,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "chai": "^5.1.2",
     "lodash": "^4.17.21",
     "playright": "^0.0.22",
     "playwright": "^1.49.1"

@@ -1,5 +1,6 @@
 const { chromium } = require("playwright");
 const _ = require("lodash");
+const { assert } = require("chai");
 
 async function sortHackerNewsArticles() {
   let browser = await chromium.launch({ headless: false });
@@ -72,30 +73,29 @@ async function sortHackerNewsArticles() {
         await restartBrowser();
       }
     }
+  
+    //Assert number of articles
+    assert.strictEqual(
+      articles.length,
+      100,
+      `Expected 100 articles, but found ${articles.length}`
+    );
+    console.log("100 articles were found");
 
-    articles = articles.slice(0, 100);
-
-    if (articles.length !== 100) {
-      throw new Error(`100 articles were not found. Found: ${articles.length}`);
-    }
-    console.log("100 articles found");
-
+    //Extract and sort IDs
     const ids = articles.map((article) => article.id);
     const sortedIds = _.sortBy(ids).reverse();
 
-    if (!_.isEqual(ids, sortedIds)) {
-      throw new Error("Articles are not sorted in the right order: From newest to oldest");
-    }
-
+    //Assert sorting
+    assert.deepEqual(ids, sortedIds, "Articles are not sorted in the correct order: From newest to oldest");
     console.log("Articles are sorted correctly");
-  } catch (error) {
-    console.error("Validation error:", error.message);
-  } finally {
-    console.log("Browser will remain open.");
-    // Browser not closed to allow further inspection
-  }
+} catch(error) {
+  console.error("Validation error:", error.meesage);
+} finally {
+  console.log("Browser will remain open.");
+  //Browser not closed allow further inspection
+ }
 }
-
 (async () => {
   await sortHackerNewsArticles();
 })();
