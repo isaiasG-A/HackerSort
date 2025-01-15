@@ -1,14 +1,15 @@
 const { chromium } = require("playwright");
+const _ = require("lodash");
 
 async function sortHackerNewsArticles() {
-  let browser = await chromium.launch({ headless: true, args: ['--disable-gpu', '--no-sandbox'] });
+  let browser = await chromium.launch({ headless: false });
   let context = await browser.newContext();
   let page = await context.newPage();
 
   async function restartBrowser() {
     console.log("Restarting browser...");
     if (browser && browser.isConnected()) await browser.close();
-    browser = await chromium.launch({ headless: true, args: ['--disable-gpu', '--no-sandbox'] });
+    browser = await chromium.launch({ headless: false});
     context = await browser.newContext();
     page = await context.newPage();
     await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
@@ -26,11 +27,12 @@ async function sortHackerNewsArticles() {
           console.log("Fetching articles...");
           const newArticles = await page.$$eval(".athing", (nodes) =>
             nodes.map((node) => ({
-              id: parseInt(node.getAttribute("id"), 10),
+              id: parseInt(node.getAttribute("id")),
             }))
           );
           console.log(`Fetched ${newArticles.length} articles from the current page.`);
-          articles = articles.concat(newArticles);
+          //articles = articles.concat(newArticles);
+          articles = _.uniqBy([...articles, ...newArticles], "id");
     
           if (articles.length < 100) {
             const link = await page.$("a.morelink");
@@ -79,9 +81,9 @@ async function sortHackerNewsArticles() {
     console.log("100 articles found");
 
     const ids = articles.map((article) => article.id);
-    const sortedIds = [...ids].sort((a, b) => b - a);
+    const sortedIds = _.sortBy(ids).reverse();
 
-    if (JSON.stringify(ids) !== JSON.stringify(sortedIds)) {
+    if (!_.isEqual(ids, sortedIds)) {
       throw new Error("Articles are not sorted in the right order: From newest to oldest");
     }
 
@@ -89,7 +91,8 @@ async function sortHackerNewsArticles() {
   } catch (error) {
     console.error("Validation error:", error.message);
   } finally {
-    if (browser) await browser.close();
+    console.log("Browser will remain open.");
+    // Browser not closed to allow further inspection
   }
 }
 
