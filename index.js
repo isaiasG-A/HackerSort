@@ -2,7 +2,32 @@ const { chromium } = require("playwright");
 const _ = require("lodash");
 const { assert } = require("chai");
 
-async function sortHackerNewsArticles() {
+
+// Version 2.0: Modularized code version(Code broken down into smaller and reusable functions.)
+
+//Function to restart th browser
+async function restartBrowser(browser, context, page) {
+  console.log("Restarting browser...");
+
+  if(browser && browser.isConnected()) await browser.close();
+  browser = await chromium.launch({ headless: false });
+  context = await browser.newContext();
+  page = await context.newPage();
+  await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
+  return { browser, context, page };
+}
+
+//Function to fetch articles
+async
+
+
+
+
+
+
+//Version 1.0: Initial code structure
+
+/*async function sortHackerNewsArticles() {
   let browser = await chromium.launch({ headless: false });
   let context = await browser.newContext();
   let page = await context.newPage();
@@ -18,6 +43,8 @@ async function sortHackerNewsArticles() {
 
   try {
     await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
+
+    
 
     let articles = [];
     let totalRetries = 3;
