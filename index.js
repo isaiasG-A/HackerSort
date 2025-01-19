@@ -1,92 +1,101 @@
-import { chromium } from "playwright";
-import _ from "lodash";
-import { assert } from "chai";
+import { chromium } from "playwright"; //Playwright for browser automation
+import _ from "lodash"; //Lodash for utility functions like sorting and removing duplicates.
+import { assert } from "chai"; //Chai for assertions to validate results.
 
 // Version 2.0: Modularized code version(Code broken down into smaller and reusable functions.)
 
-//Function to restart th browser
+//Function to restart th browser in case of errors or unexcpected closures.
 async function restartBrowser(browser, context, page) {
   console.log("Restarting browser...");
 
-  if(browser && browser.isConnected()) await browser.close();
-  browser = await chromium.launch({ headless: false });
-  context = await browser.newContext();
-  page = await context.newPage();
-  await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
-  return { browser, context, page };
+  if(browser && browser.isConnected()) await browser.close(); //Close exisitng browser.
+  browser = await chromium.launch({ headless: false }); //Launch a new browser instance.
+  context = await browser.newContext(); //Create a new browser context.
+  page = await context.newPage(); //Open a new tab.
+  await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 }); //Navigate to hacker news.
+  return { browser, context, page }; //Return updated browser, context, and page.
 }
 
-//Function to fetch articles
+//Function to fetch articles from Hacker News with pagination support
 async function fetchArticles(page, limit = 100) {
-  let articles = [];
+  let articles = []; //Initialize an empty for articles.
   while (articles.length < limit) {
     console.log("Fetching articles...");
     const newArticles = await page.$$eval(".athing", (nodes) => 
       nodes.map((node) => ({
-        id: parseInt(node.getAttribute("id")),
+        id: parseInt(node.getAttribute("id")), //Extract the unique article ID.
       }))
     );
     console.log(`Fetched${newArticles.length} articles from the current page.`);
+    
+    //Merge new articles and ensure uniqueness using Lodash's uniqBy 
     articles = _.uniqBy([...articles, ...newArticles], "id");
-
+ 
+    //if fewer than 100 articles, navigate to the next page.
     if(articles.length < limit) {
-      const link = await page.$("a.morelink");
+      const link = await page.$("a.morelink"); // Find the "More" link
       if(!link) {
         console.warn("No 'More' links found. Existing pagination.");
-        break;
+        break; // Exit if no more pages are available.
       }
-      await link.scrollIntoViewIfNeeded(); // Ensure link is visible
-      await page.waitForSelector("a.morelink", {state: "visible"}); //confirm visibility
+
+      //Ensure the "More" link is visible and clickable 
+      await link.scrollIntoViewIfNeeded();
+      await page.waitForSelector("a.morelink", {state: "visible"}); //confirm visibility.
       console.log("Found 'More' link. Clicking...");
-      const currentURL = page.url();
-      await link.click();
-      await page.waitForLoadState("networkidle"); // wait for network requests.
-      const newURL = page.url();
+      const currentURL = page.url(); //Get current page URL.
+      await link.click(); // Click the "More" link.
+      await page.waitForLoadState("networkidle"); // wait for network activity to finish.
+      const newURL = page.url(); //Get new page URL.
       console.log("URL after click:", newURL);
 
+      // Validate that the URL has changed after clicking.
       if(currentURL === newURL) {
         throw new Error("Pagination failed: URL did not change.");
       }
 
-      await page.waitForSelector(".athing", { timeout: 1000 }); //Wait for new articles
+      //Wait for new articles to load.
+      await page.waitForSelector(".athing", { timeout: 1000 }); 
     }
   }
-  return articles.slice(0, limit);
+  return articles.slice(0, limit); //return exactly the number of articles requested.
 }
 
-//Function to validate sorting
+//Function to validate sorting of articles.
 function validateSorting(articles) {
-  const ids = articles.map((article) => article.id);
-  const sortedIds = _.sortBy(ids).reverse();
+  const ids = articles.map((article) => article.id); //Extract IDs.
+  const sortedIds = _.sortBy(ids).reverse(); // Sort IDs in descending order.
 
-  //Assert number of articles
+  //Assert the number of articles.
   assert.strictEqual(articles.length, 100, `Expected 100 articles, but found ${articles.length}`);
   console.log("100 articles were found");
 
-  //Assert sorting
+  //Assert the articles are sorted correclty.
   assert.deepEqual(ids, sortedIds, "Articles are not sorted in the correct order: From newest to oldest");
   console.log("Articles are sorted correctly");
 }
 
-//Main function
+//Main function to direct fetching and validation.
 async function sortHackerNewsArticles() {
   let browser, context, page;
 
   try {
+    //Launch browser and navigate to Hacker News.
     browser = await chromium.launch({ headless: false });
     context = await browser.newContext();
     page = await context.newPage();
     await page.goto("https://news.ycombinator.com/newest", { timeout: 60000 });
 
-    //Fetch articles
+    //Fetch articles.
     const articles = await fetchArticles(page);
 
-    //Validate sorting
+    //Validate sorting.
     validateSorting(articles);
   } catch (error) {
+    //Handle any validation or runtime errors.
     console.log("Validation error:", error.message);
   } finally {
-    //Browser not closed allow further inspection
+    //Keep the browser open for further inspection.
     console.log("Browser will remain open.");
  
     /*
